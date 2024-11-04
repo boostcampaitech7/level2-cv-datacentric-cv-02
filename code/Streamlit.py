@@ -2,18 +2,42 @@ import streamlit as st
 import os
 import json
 import re
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ExifTags
+
+
+def open_image_correct_orientation(image_path):
+    # 이미지 열기
+    image = Image.open(image_path)
+
+    # EXIF 데이터에서 Orientation 태그 확인
+    try:
+        for orientation in ExifTags.TAGS.keys():
+            if ExifTags.TAGS[orientation] == 'Orientation':
+                break
+        exif = image._getexif()
+        if exif is not None and orientation in exif:
+            if exif[orientation] == 3:
+                image = image.rotate(180, expand=True)
+            elif exif[orientation] == 6:
+                image = image.rotate(270, expand=True)
+            elif exif[orientation] == 8:
+                image = image.rotate(90, expand=True)
+    except (AttributeError, KeyError, IndexError):
+        # EXIF 데이터가 없거나 처리할 수 없는 경우
+        pass
+
+    return image
 
 # 다국어 지원을 위한 폰트 파일 경로 설정
 font_paths = {
-    'Chinese': "/data/ephemeral/home/level2-cv-datacentric-cv-02/Streamlit/font/NotoSansTC-VariableFont_wght.ttf",     # 중국어 폰트
-    'Japanese': "/data/ephemeral/home/level2-cv-datacentric-cv-02/Streamlit/font/NotoSansJP-VariableFont_wght.ttf",    # 일본어 폰트
-    'Thai': "/data/ephemeral/home/level2-cv-datacentric-cv-02/Streamlit/font/NotoSansThai-VariableFont_wdth,wght.ttf", # 태국어 폰트
-    'Vietnamese': "/data/ephemeral/home/level2-cv-datacentric-cv-02/Streamlit/font/NotoSans_Condensed-Regular.ttf"     # 베트남어 (라틴 확장 폰트)
+    'Chinese': "../Streamlit/font/NotoSansTC-VariableFont_wght.ttf",
+    'Japanese': "../Streamlit/font/NotoSansJP-VariableFont_wght.ttf",
+    'Thai': "../Streamlit/font/NotoSansThai-VariableFont_wdth,wght.ttf",
+    'Vietnamese': "../Streamlit/font/NotoSans_Condensed-Regular.ttf"
 }
 
 # 기본 경로 설정
-data_path = '/data/ephemeral/home/level2-cv-datacentric-cv-02/code/data'
+data_path = 'data/'
 languages = {
     'Chinese': 'chinese_receipt',
     'Japanese': 'japanese_receipt',
