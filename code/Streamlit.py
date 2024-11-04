@@ -143,89 +143,120 @@ total_count = 0
 
 def apply_filters(transcription, bbox_id):
     """사용자 선택에 따른 transcription 및 BBOX 필터링"""
+    # 전체 표시 선택 시 필터링을 건너뜀
+    if '전체표시' in filter_types:
+        return True
+
     # null 또는 빈 transcription 필터
-    if null_filter:
+    if 'null 또는 빈 transcription 표시' in filter_types:
         if transcription is None:
             return "null"
         elif transcription == "":
             return "empty"
-        else:
-            return False  # null 또는 빈 값이 아니면 필터링
-    
-    # 일반 필터 적용
-    # BBOX ID 필터
-    if bbox_id_filter and bbox_id_filter != bbox_id:
-        return False
     
     # 글자 수 필터
     if transcription is None or len(transcription) < min_chars:
         return False
-    
+
     # 필터 유형
-    if filter_type == '특수문자':
-        if not re.search(r'[^\w\s\u4e00-\u9fff\u3040-\u30ff\u0e00-\u0e7f\u0100-\u017f]', transcription):
-            return False
-    elif filter_type == '문자':
-        if not re.search(r'[a-zA-Z\u4e00-\u9fff\u3040-\u30ff\u0e00-\u0e7f\u0100-\u017f]', transcription):
-            return False
-    elif filter_type == '숫자':
-        if not re.search(r'\d', transcription):
-            return False
-    
-    return True
+    if '특수문자' in filter_types and re.search(r'[^\w\s\u4e00-\u9fff\u3040-\u30ff\u0e00-\u0e7f\u0100-\u017f]', transcription):
+        return True
+    if '문자' in filter_types and re.search(r'[a-zA-Z\u4e00-\u9fff\u3040-\u30ff\u0e00-\u0e7f\u0100-\u017f]', transcription):
+        return True
+    if '숫자' in filter_types and re.search(r'\d', transcription):
+        return True
+
+    # BBOX ID 필터 - 문자열로 변환하여 비교
+    if bbox_id_filter and str(bbox_id_filter) != str(bbox_id):
+        return False
+
+    return False
 
 # BBOX 그리기 및 주석 표시
 for bbox_id, bbox_info in annotation_data.items():
     transcription = bbox_info['transcription']
     points = bbox_info.get('points', [])
 
-    # BBOX 개수 카운트
-    total_count += 1  # 총 BBOX 카운트
+    total_count += 1
 
-    # 좌표 형식 확인 (디버깅용)
     if not isinstance(points, list) or not all(isinstance(point, list) and len(point) == 2 for point in points):
         st.write(f"잘못된 좌표 형식: {points} (bbox_id: {bbox_id})")
-        continue  # 좌표 형식이 올바르지 않으면 해당 BBOX를 건너뜀
+        continue
 
-    # 필터 적용
     filter_result = apply_filters(transcription, bbox_id)
     if filter_result:
-        # 좌표를 정수로 변환하여 안전하게 사용
         points = [(int(x), int(y)) for x, y in points]
-        
-        # BBOX 그리기 (null과 빈 값에 대해 다른 색상 적용)
         if filter_result == "null":
-            box_color = "#006400"  # null 값인 경우 다크 그린
+            box_color = "#006400"
             null_count += 1
         elif filter_result == "empty":
-            box_color = "blue"  # 빈 문자열인 경우 진한 파란색
+            box_color = "blue"
             empty_count += 1
         else:
-            box_color = "red"  # 일반 필터에 해당하는 경우 빨간색
+            box_color = "red"
             general_count += 1
 
-        # BBOX 그리기
         if len(points) == 4:
             draw.polygon(points, outline=box_color)
-            
-            # 텍스트 경계 상자를 가져와서 크기를 계산
             text = f"{bbox_id}: {transcription}"
-            text_bbox = draw.textbbox((0, 0), text, font=font)
-            text_width = text_bbox[2] - text_bbox[0]
-            text_height = text_bbox[3] - text_bbox[1]
-
-            # 텍스트를 BBOX 바깥에 표시하기 위해 위치 조정
-            text_position = (min(point[0] for point in points), min(point[1] for point in points) - text_height - 5)
-
-            # 텍스트 추가
+            text_position = (min(point[0] for point in points), min(point[1] for point in points) - 15)
             draw.text(text_position, text, fill=box_color, font=font)
 
 # BBOX 카운트 결과 표시
-st.write("### BBOX 카운트 - null 또는 빈 transcription 표시 체크해야 null, empty BBOX 표시됨")
+st.write("### BBOX 카운트")
 st.write(f"**총 BBOX:** {total_count}")
 st.write(f"**일반 BBOX (빨간색):** {general_count}")
 st.write(f"**Null BBOX (다크 그린):** {null_count}")
 st.write(f"**Empty BBOX (파란색):** {empty_count}")
 
-# 필터링된 이미지와 주석 표시
 st.image(image, use_column_width=True)
+
+# 초기화 - 선택된 이미지와 annotation 목록을 위한 상태 저장
+if "selected_images" not in st.session_state:
+    st.session_state.selected_images = []
+
+# 이미지 선택 버튼 추가
+if st.button("이 이미지를 선택 목록에 추가"):
+    selected_annotation = {
+        "image": selected_image_file,
+        "annotations": annotation_data
+    }
+    st.session_state.selected_images.append(selected_annotation)
+    st.success("이미지가 선택 목록에 추가되었습니다.")
+
+# 선택된 이미지와 annotation 목록 표시
+st.sidebar.title("선택한 이미지와 Annotation")
+if st.session_state.selected_images:
+    indices_to_delete = []  # 삭제할 인덱스를 저장할 리스트
+    
+    for i, selected_item in enumerate(st.session_state.selected_images):
+        st.sidebar.write(f"### 이미지 {i + 1}")
+        st.sidebar.write(f"파일명: {selected_item['image']}")
+
+        selected_image_path = os.path.join(image_dir, selected_item['image'])
+        selected_image = Image.open(selected_image_path).convert("RGB")
+        draw = ImageDraw.Draw(selected_image)
+
+        # 주석 추가하여 이미지에 표시
+        for bbox_id, bbox_info in selected_item['annotations'].items():
+            transcription = bbox_info['transcription']
+            points = bbox_info.get('points', [])
+            if len(points) == 4:
+                points = [(int(x), int(y)) for x, y in points]
+                draw.polygon(points, outline="red")
+                text = f"{bbox_id}: {transcription}"
+                text_position = (min(point[0] for point in points), min(point[1] for point in points) - 15)
+                draw.text(text_position, text, fill="red", font=font)
+        
+        st.sidebar.image(selected_image, use_column_width=True)
+
+        # 삭제 버튼
+        if st.sidebar.button(f"삭제 - 이미지 {i + 1}", key=f"delete_{i}"):
+            indices_to_delete.append(i)  # 삭제할 인덱스를 리스트에 추가
+
+    # 삭제할 인덱스들을 순서대로 제거하여 `st.session_state` 업데이트
+    for index in sorted(indices_to_delete, reverse=True):
+        del st.session_state.selected_images[index]
+
+else:
+    st.sidebar.write("선택된 이미지가 없습니다.")
