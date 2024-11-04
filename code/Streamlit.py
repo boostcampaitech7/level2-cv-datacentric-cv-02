@@ -96,43 +96,38 @@ font = ImageFont.truetype(font_paths[selected_language], size=font_size)
 image_dir = os.path.join(data_path, languages[selected_language], 'img', 'train')
 image_files = sorted([f for f in os.listdir(image_dir) if f.endswith(('jpg', 'png'))])
 
-# 이미지 번호 매칭을 위한 딕셔너리 생성 (appen_ 또는 appen2_ 뒤의 숫자를 추출)
-image_number_map = {}
-for i, f in enumerate(image_files):
-    match = re.search(r'appen(?:2_)?_(\d+)', f)  # appen_ 또는 appen2_ 뒤의 숫자를 추출
-    if match:
-        image_number_map[match.group(1)] = i  # 숫자를 키로 하여 인덱스 값을 저장
-
 # 이미지 인덱스 초기화 (세션 상태 사용)
 if "image_index" not in st.session_state:
     st.session_state.image_index = 0
 
-# 이미지 탐색 (화면의 오른쪽 상단에 위치)
+# 이미지 탐색
 with st.sidebar.expander("이미지 탐색", expanded=True):
-    # 이미지 번호 입력
-    image_number_input = st.text_input("이미지 번호 입력(버튼 사용시 입력값 삭제 바람)", "")
+    # 이미지 번호 입력 (1부터 시작하는 인덱스로 이동)
+    image_number_input = st.text_input("이미지 인덱스 입력 (1 ~ 100)", "")
     
-    # 이미지 번호로 검색
-    if image_number_input and image_number_input in image_number_map:
-        st.session_state.image_index = image_number_map[image_number_input]
+    # 입력한 이미지 인덱스를 사용하여 이동
+    if image_number_input.isdigit():  # 숫자 확인
+        image_index = int(image_number_input) - 1  # 1부터 시작하므로 -1
+        if 0 <= image_index < len(image_files):  # 인덱스 범위 내 확인
+            st.session_state.image_index = image_index  # 인덱스 갱신
 
-    selected_image_file = image_files[st.session_state.image_index]
-
+    # 이전/다음 버튼을 사용한 탐색
     col1, col2, col3 = st.columns([1, 2, 1])
     with col1:
         if st.button("이전 이미지"):
             st.session_state.image_index = (st.session_state.image_index - 1) % len(image_files)
-            selected_image_file = image_files[st.session_state.image_index]
     with col2:
         st.write(f"이미지 {st.session_state.image_index + 1} / {len(image_files)}")
     with col3:
         if st.button("다음 이미지"):
             st.session_state.image_index = (st.session_state.image_index + 1) % len(image_files)
-            selected_image_file = image_files[st.session_state.image_index]
+
+# 선택한 이미지 파일
+selected_image_file = image_files[st.session_state.image_index]
+
 
 # 선택한 이미지 로드
 selected_image_path = os.path.join(image_dir, selected_image_file)
-image_id = selected_image_file.split('_')[3]  # appen2_ 또는 appen_ 뒤의 번호 추출
 st.write(f"### 이미지: {selected_image_file}")
 
 # BBOX 주석과 함께 이미지 표시
