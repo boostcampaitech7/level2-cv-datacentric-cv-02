@@ -45,6 +45,8 @@ languages = {
     'Vietnamese': 'vietnamese_receipt'
 }
 
+
+
 # 사이드바에서 언어 선택
 st.sidebar.title("언어 선택")
 selected_language = st.sidebar.selectbox("언어를 선택하세요", list(languages.keys()))
@@ -62,10 +64,26 @@ annotations = train_annotations
 # 필터 옵션 설정
 st.sidebar.title("필터 옵션")
 min_chars = st.sidebar.number_input("최소 글자 수", min_value=0, value=0, step=1)
-filter_type = st.sidebar.radio("Transcription 필터 유형", ['None', '특수문자', '문자', '숫자'])
 
-# null 또는 빈 transcription 표시 옵션을 따로 분리
-null_filter = st.sidebar.checkbox("null 또는 빈 transcription 표시")
+# 체크박스로 필터 유형 설정
+show_all = st.sidebar.checkbox("전체표시")
+show_special_char = st.sidebar.checkbox("특수문자")
+show_text = st.sidebar.checkbox("문자")
+show_numbers = st.sidebar.checkbox("숫자")
+show_null_empty = st.sidebar.checkbox("null 또는 빈 transcription 표시")
+
+# 선택된 필터 옵션에 따라 적용할 필터 리스트 생성
+filter_types = []
+if show_all:
+    filter_types.append("전체표시")
+if show_special_char:
+    filter_types.append("특수문자")
+if show_text:
+    filter_types.append("문자")
+if show_numbers:
+    filter_types.append("숫자")
+if show_null_empty:
+    filter_types.append("null 또는 빈 transcription 표시")
 
 # BBOX 번호 필터 입력
 bbox_id_filter = st.sidebar.text_input("원하는 BBOX 번호 입력", value="")
