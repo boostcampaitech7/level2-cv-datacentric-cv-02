@@ -333,6 +333,15 @@ def filter_vertices(vertices, labels, ignore_under=0, drop_under=0):
 
     return new_vertices, new_labels
 
+# 추가한 augmentations
+def scale_image(image, vertices, scale_factor):
+    """
+    Scale the image by a scale_factor and adjust vertices accordingly.
+    """
+    new_size = (int(image.width * scale_factor), int(image.height * scale_factor))
+    img = image.resize(new_size, Image.BILINEAR)
+    new_vertices = vertices * scale_factor
+    return img, new_vertices
 
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
