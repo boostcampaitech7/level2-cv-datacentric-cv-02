@@ -343,6 +343,25 @@ def scale_image(image, vertices, scale_factor):
     new_vertices = vertices * scale_factor
     return img, new_vertices
 
+def translate_image(image, vertices, x_offset=None, y_offset=None):
+    """
+    Translate the image and vertices by random or specified x_offset and y_offset.
+    If offsets are not provided, they are generated randomly within 5% ~ 10% of image dimensions.
+    """
+    if x_offset is None:
+        x_offset = np.random.randint(-int(image.width * 0.1), int(image.width * 0.1))
+    if y_offset is None:
+        y_offset = np.random.randint(-int(image.height * 0.1), int(image.height * 0.1))
+    
+    img = Image.new("RGB", (image.width + abs(x_offset), image.height + abs(y_offset)))
+    img.paste(image, (x_offset, y_offset))
+    
+    new_vertices = vertices.copy()
+    new_vertices[:, [0, 2, 4, 6]] += x_offset
+    new_vertices[:, [1, 3, 5, 7]] += y_offset
+    
+    return img, new_vertices
+
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
                  split='train',
