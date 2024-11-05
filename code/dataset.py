@@ -395,6 +395,17 @@ def adjust_brightness_contrast_saturation(image, brightness=1.0, contrast=1.0, s
     image = ImageEnhance.Color(image).enhance(saturation)
     return image
 
+def add_gaussian_noise(image, mean=0, std_range=(0.01, 0.05)):
+    """
+    Add Gaussian noise to the image with a random standard deviation within a given range.
+    """
+    std = np.random.uniform(*std_range)
+    np_image = np.array(image) / 255.0
+    noise = np.random.normal(mean, std, np_image.shape)
+    noisy_image = np.clip(np_image + noise, 0, 1) * 255
+    
+    return Image.fromarray(noisy_image.astype(np.uint8))
+
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
                  split='train',
