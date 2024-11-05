@@ -20,6 +20,7 @@ assignments
 sample_submission
 
 /code/data
+/code/trained_models
 /code/predictions
 /code/pths
 *.ipynb
