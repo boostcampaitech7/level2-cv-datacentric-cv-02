@@ -131,7 +131,7 @@ selected_image_path = os.path.join(image_dir, selected_image_file)
 st.write(f"### 이미지: {selected_image_file}")
 
 # BBOX 주석과 함께 이미지 표시
-image = Image.open(selected_image_path)
+image = open_image_correct_orientation(selected_image_path)
 draw = ImageDraw.Draw(image)
 annotation_data = annotations['images'].get(selected_image_file, {}).get('words', {})
 
@@ -234,7 +234,7 @@ if st.session_state.selected_images:
         st.sidebar.write(f"파일명: {selected_item['image']}")
 
         selected_image_path = os.path.join(image_dir, selected_item['image'])
-        selected_image = Image.open(selected_image_path).convert("RGB")
+        selected_image = open_image_correct_orientation(selected_image_path).convert("RGB")
         draw = ImageDraw.Draw(selected_image)
 
         # 주석 추가하여 이미지에 표시
