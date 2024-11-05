@@ -362,6 +362,31 @@ def translate_image(image, vertices, x_offset=None, y_offset=None):
     
     return img, new_vertices
 
+def perspective_transform(image, vertices):
+    """
+    Apply a perspective transformation to the image and adjust vertices accordingly.
+    """
+    width, height = image.size
+    pts1 = np.float32([[0, 0], [width, 0], [width, height], [0, height]])
+    shift = np.random.randint(-width // 10, width // 10, size=(4, 2))
+    pts2 = (pts1 + shift).astype(np.float32)  # Ensure pts2 is float32
+
+    # Calculate perspective transformation matrix
+    M = cv2.getPerspectiveTransform(pts1, pts2)
+    
+    # Transform image
+    img = image.transform((width, height), Image.PERSPECTIVE, M.flatten()[:8], Image.BICUBIC)
+    
+    # Transform vertices
+    new_vertices = np.zeros_like(vertices)
+    for i, vertice in enumerate(vertices):
+        reshaped_vertice = vertice.reshape(-1, 2).astype(np.float32)
+        transformed_vertice = cv2.perspectiveTransform(np.array([reshaped_vertice]), M)
+        new_vertices[i] = transformed_vertice.reshape(-1)
+        
+    return img, new_vertices
+
+
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
                  split='train',
