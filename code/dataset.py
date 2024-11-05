@@ -406,6 +406,21 @@ def add_gaussian_noise(image, mean=0, std_range=(0.01, 0.05)):
     
     return Image.fromarray(noisy_image.astype(np.uint8))
 
+def overlay_text(image, text="Sample Text", position=None, font_size=15, color=(0, 0, 0)):
+    """
+    Overlay synthetic text onto the image.
+    """
+    if isinstance(image, np.ndarray):
+        image = Image.fromarray(image)
+    
+    draw = ImageDraw.Draw(image)
+
+    if position is None:
+        position = (np.random.randint(0, image.width - 100), np.random.randint(0, image.height - 50))
+    draw.text(position, text, fill=color)
+
+    return image
+
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
                  split='train',
