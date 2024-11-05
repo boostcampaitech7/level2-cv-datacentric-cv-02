@@ -288,7 +288,7 @@ def adjust_height(img, vertices, ratio=0.2):
     return img, new_vertices
 
 
-def rotate_img(img, vertices, angle_range=10):
+def rotate_img(img, vertices, angle_range=90):
     '''rotate image [-10, 10] degree to aug data
     Input:
         img         : PIL Image
