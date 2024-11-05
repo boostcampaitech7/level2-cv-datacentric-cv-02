@@ -386,6 +386,14 @@ def perspective_transform(image, vertices):
         
     return img, new_vertices
 
+def adjust_brightness_contrast_saturation(image, brightness=1.0, contrast=1.0, saturation=1.0):
+    """
+    Adjust brightness, contrast, and saturation of the image.
+    """
+    image = ImageEnhance.Brightness(image).enhance(brightness)
+    image = ImageEnhance.Contrast(image).enhance(contrast)
+    image = ImageEnhance.Color(image).enhance(saturation)
+    return image
 
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
