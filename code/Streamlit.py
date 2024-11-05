@@ -2,7 +2,9 @@ import streamlit as st
 import os
 import json
 import re
+import numpy as np
 from PIL import Image, ImageDraw, ImageFont, ExifTags
+import math
 
 # 이미지의 올바른 방향을 유지하는 함수
 def open_image_correct_orientation(image_path):
@@ -102,8 +104,6 @@ font = ImageFont.truetype(font_paths[selected_language], size=font_size)
 def apply_filters(transcription, bbox_id):
     """사용자 선택에 따른 transcription 및 BBOX 필터링"""
     
-    
-
     # null 또는 빈 transcription 표시 필터가 선택된 경우 처리
     if 'null 또는 빈 transcription 표시' in filter_types:
         if transcription is None or transcription == "":
@@ -129,9 +129,11 @@ def apply_filters(transcription, bbox_id):
         # BBox ID 필터
         if bbox_id_filter and str(bbox_id_filter) != str(bbox_id):
             return False  # 입력한 BBox ID와 다른 경우 필터링
+            
     # 전체표시가 선택된 경우 모든 BBox를 표시
     if show_all_boxes:
         return True
+    
     # 조건에 맞는 BBox는 표시
     return False
 
@@ -164,11 +166,112 @@ with st.sidebar.expander("이미지 탐색", expanded=True):
 selected_image_file = image_files[st.session_state.image_index]
 selected_image_path = os.path.join(image_dir, selected_image_file)
 
+# Augmentation 옵션 추가
+st.sidebar.title("Augmentation Options")
+resize_opt = st.sidebar.checkbox("Resize")
+height_adj_opt = st.sidebar.checkbox("Adjust Height")
+rotate_opt = st.sidebar.checkbox("Rotate")
+salt_pepper_opt = st.sidebar.checkbox("Salt and Pepper Noise")
+
+# Augmentation 함수들
+def resize_img(img, vertices, size=1024):
+    h, w = img.height, img.width
+    ratio = size / max(h, w)
+    if w > h:
+        img = img.resize((size, int(h * ratio)), Image.BILINEAR)
+    else:
+        img = img.resize((int(w * ratio), size), Image.BILINEAR)
+    
+    # vertices가 numpy 배열이 아닐 경우 변환
+    if isinstance(vertices, dict):
+        vertices = np.array([np.array(v) for v in vertices.values()]).astype(np.float32)
+    
+    return img, vertices * ratio
+
+def adjust_height(img, vertices, ratio=0.2):
+    ratio_h = 1 + ratio * (np.random.rand() * 2 - 1)
+    old_h = img.height
+    new_h = int(np.around(old_h * ratio_h))
+    img = img.resize((img.width, new_h), Image.BILINEAR)
+
+    new_vertices = vertices.copy()
+    if isinstance(vertices, dict):
+        new_vertices = np.array([np.array(v) for v in vertices.values()]).astype(np.float32)
+        
+    new_vertices[:, [1, 3, 5, 7]] *= (new_h / old_h)
+    return img, new_vertices
+
+# 코드의 적절한 위치에 이 함수를 추가합니다.
+def get_rotate_mat(theta):
+    '''양수 theta 값은 시계 방향 회전을 의미합니다.'''
+    return np.array([[math.cos(theta), -math.sin(theta)], [math.sin(theta), math.cos(theta)]])
+
+def rotate_vertices(vertices, theta, anchor=None):
+    '''주어진 앵커를 중심으로 꼭지점을 회전시킵니다.
+    입력:
+        vertices: 텍스트 영역의 꼭지점 <numpy.ndarray, (8,)>
+        theta   : 라디안 단위의 회전 각도
+        anchor  : 회전 중 고정 위치
+    출력:
+        회전된 꼭지점 <numpy.ndarray, (8,)>
+    '''
+    v = vertices.reshape((4,2)).T
+    if anchor is None:
+        anchor = v[:,:1]
+    rotate_mat = get_rotate_mat(theta)
+    res = np.dot(rotate_mat, v - anchor)
+    return (res + anchor).T.reshape(-1)
+
+def rotate_img(img, vertices, angle_range=10):
+    center_x = (img.width - 1) / 2
+    center_y = (img.height - 1) / 2
+    angle = angle_range * (np.random.rand() * 2 - 1)
+    img = img.rotate(angle, Image.BILINEAR)
+    
+    new_vertices = np.zeros(vertices.shape)
+    for i, vertice in enumerate(vertices):
+        new_vertices[i, :] = rotate_vertices(vertice, -angle / 180 * np.pi, np.array([[center_x], [center_y]]))
+    
+    return img, new_vertices
+
+def add_salt_and_pepper_noise(image, vertices, amount=0.02):
+    np_image = np.array(image)
+    height, width = np_image.shape[:2]
+    mask = np.zeros((height, width), dtype=np.uint8)
+    for vert in vertices:
+        polygon = [(vert[i], vert[i + 1]) for i in range(0, len(vert), 2)]
+        ImageDraw.Draw(Image.fromarray(mask)).polygon(polygon, outline=1, fill=1)
+
+    num_salt = int(np.ceil(amount * np_image.size * 0.5))
+    num_pepper = int(np.ceil(amount * np_image.size * 0.5))
+
+    salt_coords = [(np.random.randint(0, height), np.random.randint(0, width)) for _ in range(num_salt)]
+    for y, x in salt_coords:
+        if mask[y, x] == 0:
+            np_image[y, x] = 255
+
+    pepper_coords = [(np.random.randint(0, height), np.random.randint(0, width)) for _ in range(num_pepper)]
+    for y, x in pepper_coords:
+        if mask[y, x] == 0:
+            np_image[y, x] = 0
+
+    return Image.fromarray(np_image)
+
 if dataset_type == "Train":
     # Train 데이터 시각화
     image = open_image_correct_orientation(selected_image_path)
     draw = ImageDraw.Draw(image)
     annotation_data = annotations['images'].get(selected_image_file, {}).get('words', {})
+
+    # vertices를 numpy 배열로 변환
+    vertices = []
+    for bbox_id, bbox_info in annotation_data.items():
+        transcription = bbox_info['transcription']
+        points = bbox_info.get('points', [])
+        if len(points) == 4:
+            vertices.append(np.array(points).flatten())
+    
+    vertices = np.array(vertices)
 
     for bbox_id, bbox_info in annotation_data.items():
         transcription = bbox_info['transcription']
@@ -182,6 +285,16 @@ if dataset_type == "Train":
                 text = f"{bbox_id}: {transcription}"
                 text_position = (min(point[0] for point in points), min(point[1] for point in points) - 15)
                 draw.text(text_position, text, fill="red", font=font)
+
+    # Augmentation 적용
+    if resize_opt:
+        image, vertices = resize_img(image, vertices)
+    if height_adj_opt:
+        image, vertices = adjust_height(image, vertices)
+    if rotate_opt:
+        image, vertices = rotate_img(image, vertices)
+    if salt_pepper_opt:
+        image = add_salt_and_pepper_noise(image, vertices)
 
     st.image(image, use_column_width=True, caption="Train 데이터 시각화")
 
