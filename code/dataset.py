@@ -335,179 +335,165 @@ def filter_vertices(vertices, labels, ignore_under=0, drop_under=0):
     return new_vertices, new_labels
 
 # 추가한 augmentations
-def scale_image(image, vertices, scale_factor):
-    """
-    Scale the image by a scale_factor and adjust vertices accordingly.
-    """
-    new_size = (int(image.width * scale_factor), int(image.height * scale_factor))
-    img = image.resize(new_size, Image.BILINEAR)
-    new_vertices = vertices * scale_factor
-    return img, new_vertices
+#def translate_image(image, vertices, x_ratio, y_ratio):
+#
+#    # Calculate pixel offsets from the ratios
+#    x_offset = int(image.width * x_ratio)
+#    y_offset = int(image.height * y_ratio)
+#    
+#    # Calculate new image dimensions to fit the translation
+#    new_width = image.width + abs(x_offset)
+#    new_height = image.height + abs(y_offset)
+#    
+#    # Create a new blank image with adjusted dimensions
+#    img = Image.new("RGB", (new_width, new_height))
+#    
+#    # Determine the position to paste the original image in the new canvas
+#    paste_x = max(0, x_offset)
+#    paste_y = max(0, y_offset)
+#    img.paste(image, (paste_x, paste_y))
+#    
+#    # Adjust vertices by the calculated pixel offsets
+#    new_vertices = vertices.copy()
+#    new_vertices[:, [0, 2, 4, 6]] += x_offset
+#    new_vertices[:, [1, 3, 5, 7]] += y_offset
+#    
+#    return img, new_vertices
 
-def translate_image(image, vertices, x_offset=None, y_offset=None):
+#def perspective_transform(image, vertices):
+#    """
+#    Apply a perspective transformation to the image and adjust vertices accordingly.
+#    """
+#    width, height = image.size
+#    # shift 값을 이미지 크기의 약 5%에서 10%로 설정
+#    shift_range = max(width, height) // 20  # 5% 변환
+#    shift = np.random.randint(-shift_range, shift_range, size=(4, 2)).astype(np.float32)
+#
+#    pts1 = np.float32([[0, 0], [width, 0], [width, height], [0, height]])
+#    pts2 = (pts1 + shift).astype(np.float32)
+#
+#    # Calculate perspective transformation matrix
+#    M = cv2.getPerspectiveTransform(pts1, pts2)
+#    
+#    # Transform image
+#    img = image.transform((width, height), Image.PERSPECTIVE, M.flatten()[:8], Image.BICUBIC)
+#    
+#    # Transform vertices
+#    new_vertices = np.zeros_like(vertices)
+#    for i, vertice in enumerate(vertices):
+#        reshaped_vertice = vertice.reshape(-1, 2).astype(np.float32)
+#        transformed_vertice = cv2.perspectiveTransform(np.array([reshaped_vertice]), M)
+#        new_vertices[i] = transformed_vertice.reshape(-1)
+#        
+#    return img, new_vertices
+
+
+
+#def add_gaussian_noise(image, mean=0, std=0.1):
+#    """
+#    Add Gaussian noise to the image.
+#    """
+#    np_image = np.array(image) / 255.0
+#    noise = np.random.normal(mean, std, np_image.shape)
+#    noisy_image = np.clip(np_image + noise, 0, 1) * 255
+#    return Image.fromarray(noisy_image.astype(np.uint8))
+
+
+
+def add_salt_and_pepper_noise(image, vertices, amount=0.02):
     """
-    Translate the image and vertices by random or specified x_offset and y_offset.
-    If offsets are not provided, they are generated randomly within 5% ~ 10% of image dimensions.
+    Add salt-and-pepper noise to the image.
     """
-    if x_offset is None:
-        x_offset = np.random.randint(-int(image.width * 0.1), int(image.width * 0.1))
-    if y_offset is None:
-        y_offset = np.random.randint(-int(image.height * 0.1), int(image.height * 0.1))
+    # Convert image to numpy array for easy manipulation
+    np_image = np.array(image)
+    height, width = np_image.shape[:2]
     
-    img = Image.new("RGB", (image.width + abs(x_offset), image.height + abs(y_offset)))
-    img.paste(image, (x_offset, y_offset))
+    # Create a mask with the same dimensions as the image
+    mask = np.zeros((height, width), dtype=np.uint8)
     
-    new_vertices = vertices.copy()
-    new_vertices[:, [0, 2, 4, 6]] += x_offset
-    new_vertices[:, [1, 3, 5, 7]] += y_offset
-    
-    return img, new_vertices
+    # Fill the mask with the text regions using vertices
+    for vert in vertices:
+        polygon = [(vert[i], vert[i + 1]) for i in range(0, len(vert), 2)]
+        ImageDraw.Draw(Image.fromarray(mask)).polygon(polygon, outline=1, fill=1)
 
-def perspective_transform(image, vertices):
-    """
-    Apply a perspective transformation to the image and adjust vertices accordingly.
-    """
-    width, height = image.size
-    pts1 = np.float32([[0, 0], [width, 0], [width, height], [0, height]])
-    shift = np.random.randint(-width // 10, width // 10, size=(4, 2))
-    pts2 = (pts1 + shift).astype(np.float32)  # Ensure pts2 is float32
+    # Calculate number of salt and pepper pixels based on the amount
+    num_salt = int(np.ceil(amount * np_image.size * 0.5))
+    num_pepper = int(np.ceil(amount * np_image.size * 0.5))
 
-    # Calculate perspective transformation matrix
-    M = cv2.getPerspectiveTransform(pts1, pts2)
-    
-    # Transform image
-    img = image.transform((width, height), Image.PERSPECTIVE, M.flatten()[:8], Image.BICUBIC)
-    
-    # Transform vertices
-    new_vertices = np.zeros_like(vertices)
-    for i, vertice in enumerate(vertices):
-        reshaped_vertice = vertice.reshape(-1, 2).astype(np.float32)
-        transformed_vertice = cv2.perspectiveTransform(np.array([reshaped_vertice]), M)
-        new_vertices[i] = transformed_vertice.reshape(-1)
-        
-    return img, new_vertices
+    # Salt (white pixels)
+    salt_coords = [
+        (np.random.randint(0, height), np.random.randint(0, width)) for _ in range(num_salt)
+    ]
+    for y, x in salt_coords:
+        if mask[y, x] == 0:  # Only add noise to non-text areas
+            np_image[y, x] = 255
 
-def adjust_brightness_contrast_saturation(image, brightness=1.0, contrast=1.0, saturation=1.0):
-    """
-    Adjust brightness, contrast, and saturation of the image.
-    """
-    image = ImageEnhance.Brightness(image).enhance(brightness)
-    image = ImageEnhance.Contrast(image).enhance(contrast)
-    image = ImageEnhance.Color(image).enhance(saturation)
-    return image
+    # Pepper (black pixels)
+    pepper_coords = [
+        (np.random.randint(0, height), np.random.randint(0, width)) for _ in range(num_pepper)
+    ]
+    for y, x in pepper_coords:
+        if mask[y, x] == 0:  # Only add noise to non-text areas
+            np_image[y, x] = 0
+    # Convert numpy array back to PIL Image
+    return Image.fromarray(np_image)
 
-def add_gaussian_noise(image, mean=0, std_range=(0.01, 0.05)):
-    """
-    Add Gaussian noise to the image with a random standard deviation within a given range.
-    """
-    std = np.random.uniform(*std_range)
-    np_image = np.array(image) / 255.0
-    noise = np.random.normal(mean, std, np_image.shape)
-    noisy_image = np.clip(np_image + noise, 0, 1) * 255
-    
-    return Image.fromarray(noisy_image.astype(np.uint8))
+#def add_random_lines(image, vertices, num_lines=5, thickness=2, max_attempts=5):
+#    """
+#    Add random black lines to the image without overlapping text regions defined by vertices.
+#
+#    """
+#    draw = ImageDraw.Draw(image)
+#    width, height = image.size
+#    # Create a mask for text regions
+#    mask = np.zeros((height, width), dtype=np.uint8)
+#    for vert in vertices:
+#        polygon = [(vert[i], vert[i + 1]) for i in range(0, len(vert), 2)]
+#        ImageDraw.Draw(Image.fromarray(mask)).polygon(polygon, outline=1, fill=1)
+#
+#    lines_added = 0
+#    attempts = 0
 
-def overlay_text(image, text="Sample Text", position=None, font_size=15, color=(0, 0, 0)):
-    """
-    Overlay synthetic text onto the image.
-    """
-    if isinstance(image, np.ndarray):
-        image = Image.fromarray(image)
-    
-    draw = ImageDraw.Draw(image)
+#    while lines_added < num_lines and attempts < max_attempts:
+#        # Reset attempt counter for each new line
+#        attempts = 0
+#        
+#        # Randomly choose line orientation
+#        is_horizontal = np.random.rand() > 0.5
+#
+#        while attempts < max_attempts:
+#            # Generate random line coordinates
+#            if is_horizontal:
+#                y = np.random.randint(0, height)
+#                x_start = np.random.randint(0, width // 2)
+#                x_end = np.random.randint(width // 2, width)
+#                line_coords = [(x_start, y), (x_end, y)]
+#            else:
+#                x = np.random.randint(0, width)
+#                y_start = np.random.randint(0, height // 2)
+#                y_end = np.random.randint(height // 2, height)
+#                line_coords = [(x, y_start), (x, y_end)]
+#
+#            # Check if the line overlaps with text regions
+#            overlaps = False
+#            for x, y in line_coords:
+#                if mask[int(y), int(x)] == 1:
+#                    overlaps = True
+#                    break
 
-    if position is None:
-        position = (np.random.randint(0, image.width - 100), np.random.randint(0, image.height - 50))
-    draw.text(position, text, fill=color)
+#            # If no overlap, draw the line and break the loop
+#            if not overlaps:
+#                draw.line(line_coords, fill="black", width=thickness)
+#                lines_added += 1
+#                break
+#            
+#            # Increment attempt counter if overlap found
+#            attempts += 1
 
-    return image
+#    return image
 
-class SceneTextDataset(Dataset):
-    def __init__(self, root_dir,
-                 split='train',
-                 image_size=2048,
-                 crop_size=1024,
-                 ignore_under_threshold=10,
-                 drop_under_threshold=1,
-                 color_jitter=True,
-                 normalize=True):
-        self._lang_list = ['chinese', 'japanese', 'thai', 'vietnamese']
-        self.root_dir = root_dir
-        self.split = split
-        total_anno = dict(images=dict())
-        for nation in self._lang_list:
-            with open(osp.join(root_dir, '{}_receipt/ufo/{}.json'.format(nation, split)), 'r', encoding='utf-8') as f:
-                anno = json.load(f)
-            for im in anno['images']:
-                total_anno['images'][im] = anno['images'][im]
 
-        self.anno = total_anno
-        self.image_fnames = sorted(self.anno['images'].keys())
 
-        self.image_size, self.crop_size = image_size, crop_size
-        self.color_jitter, self.normalize = color_jitter, normalize
-
-        self.drop_under_threshold = drop_under_threshold
-        self.ignore_under_threshold = ignore_under_threshold
-
-    def _infer_dir(self, fname):
-        lang_indicator = fname.split('.')[1]
-        if lang_indicator == 'zh':
-            lang = 'chinese'
-        elif lang_indicator == 'ja':
-            lang = 'japanese'
-        elif lang_indicator == 'th':
-            lang = 'thai'
-        elif lang_indicator == 'vi':
-            lang = 'vietnamese'
-        else:
-            raise ValueError
-        return osp.join(self.root_dir, f'{lang}_receipt', 'img', self.split)
-    def __len__(self):
-        return len(self.image_fnames)
-
-    def __getitem__(self, idx):
-        image_fname = self.image_fnames[idx]
-        image_fpath = osp.join(self._infer_dir(image_fname), image_fname)
-
-        vertices, labels = [], []
-        for word_info in self.anno['images'][image_fname]['words'].values():
-            num_pts = np.array(word_info['points']).shape[0]
-            if num_pts > 4:
-                continue
-            vertices.append(np.array(word_info['points']).flatten())
-            labels.append(1)
-        vertices, labels = np.array(vertices, dtype=np.float32), np.array(labels, dtype=np.int64)
-
-        vertices, labels = filter_vertices(
-            vertices,
-            labels,
-            ignore_under=self.ignore_under_threshold,
-            drop_under=self.drop_under_threshold
-        )
-
-        image = Image.open(image_fpath)
-        image, vertices = resize_img(image, vertices, self.image_size)
-        image, vertices = adjust_height(image, vertices)
-        image, vertices = rotate_img(image, vertices)
-        image, vertices = crop_img(image, vertices, labels, self.crop_size)
-
-        if image.mode != 'RGB':
-            image = image.convert('RGB')
-        image = np.array(image)
-
-        funcs = []
-        if self.color_jitter:
-            funcs.append(A.ColorJitter())
-        if self.normalize:
-            funcs.append(A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
-        transform = A.Compose(funcs)
-
-        image = transform(image=image)['image']
-        word_bboxes = np.reshape(vertices, (-1, 4, 2))
-        roi_mask = generate_roi_mask(image, vertices, labels)
-
-        return image, word_bboxes, roi_mask
 
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
@@ -587,55 +573,37 @@ class SceneTextDataset(Dataset):
         image = np.array(image)
 
         # Apply additional augmentations if enabled
-        # 사용하고 싶은 Augmentation 주석 제거 후 사용
         if self.apply_augments:
-            # Random scaling
-            if np.random.rand() > 0.5:
-                scale_factor = np.random.uniform(0.9, 1.1)
-                image, vertices = scale_image(Image.fromarray(image), vertices, scale_factor)
-                image = np.array(image)
 
-            # Random translation
-            if np.random.rand() > 0:
-                x_offset, y_offset = np.random.randint(-10, 10), np.random.randint(-10, 10)
-                image, vertices = translate_image(Image.fromarray(image), vertices, x_offset, y_offset)
-                image = np.array(image)
+            # # Random translation
+            # if np.random.rand() > 0.0:
+            #     x_ratio, y_ratio = np.random.randint(0, 5), np.random.randint(0, 5)
+            #     image, vertices = translate_image(Image.fromarray(image), vertices, x_ratio/100, y_ratio/100)
+            #     image = np.array(image)
 
-            # # Perspective transformation
-            if np.random.rand() > 0.5:
-                image, vertices = perspective_transform(Image.fromarray(image), vertices)
-                image = np.array(image)
+             # Salt and Pepper
+             if np.random.rand() > 0.0:
+               image = add_salt_and_pepper_noise(Image.fromarray(image), vertices, amount=0.02)
+               image = np.array(image)
 
-            # # Adjust brightness, contrast, and saturation randomly
-            if np.random.rand() > 0.5:
-                brightness = np.random.uniform(0.8, 1.2)
-                contrast = np.random.uniform(0.8, 1.2)
-                saturation = np.random.uniform(0.8, 1.2)
-                image = adjust_brightness_contrast_saturation(Image.fromarray(image), brightness, contrast, saturation)
-                image = np.array(image)
+            # # Add random lines
+            # if np.random.rand() > 0.0:
+            #    image=add_random_lines(Image.fromarray(image), vertices, num_lines=5, thickness=2)
+            #    image = np.array(image)
+
 
             # Add Gaussian noise
-            if np.random.rand() > 0:
-                image = add_gaussian_noise(image, std_range=(0.01, 0.05))
-                image = np.array(image)
+            #if np.random.rand() > 0.5:
+            #    image = add_gaussian_noise(Image.fromarray(image))
+            #    image = np.array(image)
 
-            # Overlay synthetic text
-            if np.random.rand() > 0:
-                if isinstance(image, np.ndarray):
-                    image = Image.fromarray(image)
 
-                image = overlay_text(image)
-
-        # Albumentations color jitter and normalize (existing functionality)
         funcs = []
         if self.color_jitter:
             funcs.append(A.ColorJitter())
         if self.normalize:
             funcs.append(A.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5)))
         transform = A.Compose(funcs)
-
-        if not isinstance(image, np.ndarray):
-            image = np.array(image)
 
         image = transform(image=image)['image']
         word_bboxes = np.reshape(vertices, (-1, 4, 2))

@@ -20,6 +20,8 @@ assignments
 sample_submission
 
 /code/data
+/code/trained_models
+/code/predictions
 /code/pths
 *.ipynb
 # labeling_make.ipynb 파일은 무시하지 않음
