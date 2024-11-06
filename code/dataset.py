@@ -2,6 +2,7 @@ import os.path as osp
 import math
 import json
 from PIL import Image
+from PIL import ImageDraw, ImageFont, ImageEnhance
 
 import torch
 import numpy as np
@@ -288,7 +289,7 @@ def adjust_height(img, vertices, ratio=0.2):
     return img, new_vertices
 
 
-def rotate_img(img, vertices, angle_range=10):
+def rotate_img(img, vertices, angle_range=90):
     '''rotate image [-10, 10] degree to aug data
     Input:
         img         : PIL Image
@@ -333,6 +334,166 @@ def filter_vertices(vertices, labels, ignore_under=0, drop_under=0):
 
     return new_vertices, new_labels
 
+# 추가한 augmentations
+#def translate_image(image, vertices, x_ratio, y_ratio):
+#
+#    # Calculate pixel offsets from the ratios
+#    x_offset = int(image.width * x_ratio)
+#    y_offset = int(image.height * y_ratio)
+#    
+#    # Calculate new image dimensions to fit the translation
+#    new_width = image.width + abs(x_offset)
+#    new_height = image.height + abs(y_offset)
+#    
+#    # Create a new blank image with adjusted dimensions
+#    img = Image.new("RGB", (new_width, new_height))
+#    
+#    # Determine the position to paste the original image in the new canvas
+#    paste_x = max(0, x_offset)
+#    paste_y = max(0, y_offset)
+#    img.paste(image, (paste_x, paste_y))
+#    
+#    # Adjust vertices by the calculated pixel offsets
+#    new_vertices = vertices.copy()
+#    new_vertices[:, [0, 2, 4, 6]] += x_offset
+#    new_vertices[:, [1, 3, 5, 7]] += y_offset
+#    
+#    return img, new_vertices
+
+#def perspective_transform(image, vertices):
+#    """
+#    Apply a perspective transformation to the image and adjust vertices accordingly.
+#    """
+#    width, height = image.size
+#    # shift 값을 이미지 크기의 약 5%에서 10%로 설정
+#    shift_range = max(width, height) // 20  # 5% 변환
+#    shift = np.random.randint(-shift_range, shift_range, size=(4, 2)).astype(np.float32)
+#
+#    pts1 = np.float32([[0, 0], [width, 0], [width, height], [0, height]])
+#    pts2 = (pts1 + shift).astype(np.float32)
+#
+#    # Calculate perspective transformation matrix
+#    M = cv2.getPerspectiveTransform(pts1, pts2)
+#    
+#    # Transform image
+#    img = image.transform((width, height), Image.PERSPECTIVE, M.flatten()[:8], Image.BICUBIC)
+#    
+#    # Transform vertices
+#    new_vertices = np.zeros_like(vertices)
+#    for i, vertice in enumerate(vertices):
+#        reshaped_vertice = vertice.reshape(-1, 2).astype(np.float32)
+#        transformed_vertice = cv2.perspectiveTransform(np.array([reshaped_vertice]), M)
+#        new_vertices[i] = transformed_vertice.reshape(-1)
+#        
+#    return img, new_vertices
+
+
+
+#def add_gaussian_noise(image, mean=0, std=0.1):
+#    """
+#    Add Gaussian noise to the image.
+#    """
+#    np_image = np.array(image) / 255.0
+#    noise = np.random.normal(mean, std, np_image.shape)
+#    noisy_image = np.clip(np_image + noise, 0, 1) * 255
+#    return Image.fromarray(noisy_image.astype(np.uint8))
+
+
+
+#def add_salt_and_pepper_noise(image, vertices, amount=0.02):
+#    """
+#    Add salt-and-pepper noise to the image.
+#    """
+#    # Convert image to numpy array for easy manipulation
+#    np_image = np.array(image)
+#    height, width = np_image.shape[:2]
+#    
+#    # Create a mask with the same dimensions as the image
+#    mask = np.zeros((height, width), dtype=np.uint8)
+#    
+#    # Fill the mask with the text regions using vertices
+#    for vert in vertices:
+#        polygon = [(vert[i], vert[i + 1]) for i in range(0, len(vert), 2)]
+#        ImageDraw.Draw(Image.fromarray(mask)).polygon(polygon, outline=1, fill=1)
+#
+#    # Calculate number of salt and pepper pixels based on the amount
+#    num_salt = int(np.ceil(amount * np_image.size * 0.5))
+#    num_pepper = int(np.ceil(amount * np_image.size * 0.5))
+#
+#    # Salt (white pixels)
+#    salt_coords = [
+#        (np.random.randint(0, height), np.random.randint(0, width)) for _ in range(num_salt)
+#    ]
+#    for y, x in salt_coords:
+#        if mask[y, x] == 0:  # Only add noise to non-text areas
+#            np_image[y, x] = 255
+#
+#    # Pepper (black pixels)
+#    pepper_coords = [
+#        (np.random.randint(0, height), np.random.randint(0, width)) for _ in range(num_pepper)
+#    ]
+#    for y, x in pepper_coords:
+#        if mask[y, x] == 0:  # Only add noise to non-text areas
+#            np_image[y, x] = 0
+#    # Convert numpy array back to PIL Image
+#    return Image.fromarray(np_image)
+
+#def add_random_lines(image, vertices, num_lines=5, thickness=2, max_attempts=5):
+#    """
+#    Add random black lines to the image without overlapping text regions defined by vertices.
+#
+#    """
+#    draw = ImageDraw.Draw(image)
+#    width, height = image.size
+#    # Create a mask for text regions
+#    mask = np.zeros((height, width), dtype=np.uint8)
+#    for vert in vertices:
+#        polygon = [(vert[i], vert[i + 1]) for i in range(0, len(vert), 2)]
+#        ImageDraw.Draw(Image.fromarray(mask)).polygon(polygon, outline=1, fill=1)
+#
+#    lines_added = 0
+#    attempts = 0
+
+#    while lines_added < num_lines and attempts < max_attempts:
+#        # Reset attempt counter for each new line
+#        attempts = 0
+#        
+#        # Randomly choose line orientation
+#        is_horizontal = np.random.rand() > 0.5
+#
+#        while attempts < max_attempts:
+#            # Generate random line coordinates
+#            if is_horizontal:
+#                y = np.random.randint(0, height)
+#                x_start = np.random.randint(0, width // 2)
+#                x_end = np.random.randint(width // 2, width)
+#                line_coords = [(x_start, y), (x_end, y)]
+#            else:
+#                x = np.random.randint(0, width)
+#                y_start = np.random.randint(0, height // 2)
+#                y_end = np.random.randint(height // 2, height)
+#                line_coords = [(x, y_start), (x, y_end)]
+#
+#            # Check if the line overlaps with text regions
+#            overlaps = False
+#            for x, y in line_coords:
+#                if mask[int(y), int(x)] == 1:
+#                    overlaps = True
+#                    break
+
+#            # If no overlap, draw the line and break the loop
+#            if not overlaps:
+#                draw.line(line_coords, fill="black", width=thickness)
+#                lines_added += 1
+#                break
+#            
+#            # Increment attempt counter if overlap found
+#            attempts += 1
+
+#    return image
+
+
+
 
 class SceneTextDataset(Dataset):
     def __init__(self, root_dir,
@@ -342,7 +503,8 @@ class SceneTextDataset(Dataset):
                  ignore_under_threshold=10,
                  drop_under_threshold=1,
                  color_jitter=True,
-                 normalize=True):
+                 normalize=True,
+                 apply_augments=True):
         self._lang_list = ['chinese', 'japanese', 'thai', 'vietnamese']
         self.root_dir = root_dir
         self.split = split
@@ -358,6 +520,7 @@ class SceneTextDataset(Dataset):
 
         self.image_size, self.crop_size = image_size, crop_size
         self.color_jitter, self.normalize = color_jitter, normalize
+        self.apply_augments = apply_augments
 
         self.drop_under_threshold = drop_under_threshold
         self.ignore_under_threshold = ignore_under_threshold
@@ -375,6 +538,7 @@ class SceneTextDataset(Dataset):
         else:
             raise ValueError
         return osp.join(self.root_dir, f'{lang}_receipt', 'img', self.split)
+
     def __len__(self):
         return len(self.image_fnames)
 
@@ -408,6 +572,32 @@ class SceneTextDataset(Dataset):
             image = image.convert('RGB')
         image = np.array(image)
 
+        # Apply additional augmentations if enabled
+        #if self.apply_augments:
+
+            # # Random translation
+            # if np.random.rand() > 0.0:
+            #     x_ratio, y_ratio = np.random.randint(0, 5), np.random.randint(0, 5)
+            #     image, vertices = translate_image(Image.fromarray(image), vertices, x_ratio/100, y_ratio/100)
+            #     image = np.array(image)
+
+            # # Salt and Pepper
+            # if np.random.rand() > 0.0:
+            #   image = add_salt_and_pepper_noise(Image.fromarray(image), vertices, amount=0.02)
+            #   image = np.array(image)
+
+            # # Add random lines
+            # if np.random.rand() > 0.0:
+            #    image=add_random_lines(Image.fromarray(image), vertices, num_lines=5, thickness=2)
+            #    image = np.array(image)
+
+
+            # Add Gaussian noise
+            #if np.random.rand() > 0.5:
+            #    image = add_gaussian_noise(Image.fromarray(image))
+            #    image = np.array(image)
+
+
         funcs = []
         if self.color_jitter:
             funcs.append(A.ColorJitter())
@@ -419,4 +609,8 @@ class SceneTextDataset(Dataset):
         word_bboxes = np.reshape(vertices, (-1, 4, 2))
         roi_mask = generate_roi_mask(image, vertices, labels)
 
+        image = cv2.resize(image, (self.crop_size, self.crop_size))
+        roi_mask = cv2.resize(roi_mask, (self.crop_size, self.crop_size))
+
         return image, word_bboxes, roi_mask
+
