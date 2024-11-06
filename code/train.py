@@ -12,7 +12,7 @@ from torch.optim import lr_scheduler
 from tqdm import tqdm
 
 from east_dataset import EASTDataset
-from dataset import SceneTextDataset
+from hugging_dataset import ClovaSceneTextDataset
 from model import EAST
 
 
@@ -33,7 +33,8 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=8)
     parser.add_argument('--learning_rate', type=float, default=1e-3)
     parser.add_argument('--max_epoch', type=int, default=150)
-    parser.add_argument('--save_interval', type=int, default=5)
+    parser.add_argument('--save_interval', type=int, default=10)
+    parser.add_argument('--name', type=str, default='')
     
     args = parser.parse_args()
 
@@ -42,11 +43,19 @@ def parse_args():
 
     return args
 
-
-def do_training(data_dir, model_dir, device, image_size, input_size, num_workers, batch_size,
-                learning_rate, max_epoch, save_interval):
-    dataset = SceneTextDataset(
-        data_dir,
+def do_training(data_dir, 
+                model_dir, 
+                device, 
+                image_size, 
+                input_size, 
+                num_workers, 
+                batch_size,
+                learning_rate, 
+                max_epoch, 
+                save_interval,
+                name):
+    dataset = ClovaSceneTextDataset(
+        root_dir=osp.join(data_dir, 'ufo'),  
         split='train',
         image_size=image_size,
         crop_size=input_size,
@@ -97,7 +106,7 @@ def do_training(data_dir, model_dir, device, image_size, input_size, num_workers
             if not osp.exists(model_dir):
                 os.makedirs(model_dir)
 
-            ckpt_fpath = osp.join(model_dir, 'latest.pth')
+            ckpt_fpath = osp.join(model_dir, name + '_' + str(save_interval) + '.pth')
             torch.save(model.state_dict(), ckpt_fpath)
 
 
