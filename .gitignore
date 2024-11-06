@@ -22,6 +22,7 @@ sample_submission
 /code/data
 /code/pths
 *.ipynb
+*.pth
 # labeling_make.ipynb 파일은 무시하지 않음
 !dataset/labeling_make.ipynb
 
