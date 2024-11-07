@@ -1,3 +1,6 @@
+# aistage, '앙상블을 진행해보자!', 작성자 이상혁
+# https://stages.ai/competitions/315/board/community/post/2878
+
 import json
 import numpy as np
 from shapely.geometry import Polygon
